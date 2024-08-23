@@ -191,12 +191,13 @@ func exporterhelperOptions(
 			MaxSizeConfig: cfg.Batcher.MaxSizeConfig,
 		}
 		opts = append(opts, exporterhelper.WithBatcher(batcherConfig))
-
-		// Effectively disable timeout_sender because timeout is enforced in bulk indexer.
-		//
-		// We keep timeout_sender enabled in the async mode (Batcher.Enabled == nil),
-		// to ensure sending data to the background workers will not block indefinitely.
-		opts = append(opts, exporterhelper.WithTimeout(exporterhelper.TimeoutSettings{Timeout: 0}))
 	}
+
+	// Effectively disable timeout_sender because timeout is enforced in bulk indexer.
+	//
+	// We keep timeout_sender enabled in the async mode (Batcher.Enabled == nil),
+	// to ensure sending data to the background workers will not block indefinitely.
+	opts = append(opts, exporterhelper.WithTimeout(exporterhelper.TimeoutSettings{Timeout: 0}))
+
 	return opts
 }
