@@ -9,6 +9,7 @@ import (
 	"time"
 
 	remoteapi "github.com/prometheus/client_golang/exp/api/remote"
+	"github.com/prometheus/prometheus/config"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config/confighttp"
 	"go.opentelemetry.io/collector/config/configoptional"
@@ -54,22 +55,22 @@ func createMetricsExporter(ctx context.Context, set exporter.Settings,
 		numConsumers = prwCfg.RemoteWriteQueue.NumConsumers
 	}
 
-	qCfg := configoptional.Default(exporterhelper.QueueBatchConfig{
+	queueCfg := exporterhelper.QueueBatchConfig{
+		Enabled:      prwCfg.RemoteWriteQueue.Enabled,
 		NumConsumers: numConsumers,
 		QueueSize:    int64(prwCfg.RemoteWriteQueue.QueueSize),
 		Sizer:        exporterhelper.RequestSizerTypeRequests,
-	})
-	if prwCfg.RemoteWriteQueue.Enabled {
-		qCfg.GetOrInsertDefault()
 	}
-
+	if prwCfg.SendingQueue.Enabled {
+		queueCfg = prwCfg.SendingQueue
+	}
 	exporter, err := exporterhelper.NewMetrics(
 		ctx,
 		set,
 		cfg,
 		prwe.PushMetrics,
 		exporterhelper.WithTimeout(prwCfg.TimeoutSettings),
-		exporterhelper.WithQueue(qCfg),
+		exporterhelper.WithQueue(queueCfg),
 		exporterhelper.WithStart(prwe.Start),
 		exporterhelper.WithShutdown(prwe.Shutdown),
 	)

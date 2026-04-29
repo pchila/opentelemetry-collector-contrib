@@ -52,6 +52,17 @@ prometheusremotewrite/disabled_queue:
     enabled: false
     num_consumers: 10
 
+prometheusremotewrite/with_sending_queue:
+  endpoint: "localhost:8888"
+  # Opt in to the exporterhelper standard queue.
+  # remote_write_queue must be disabled when sending_queue is enabled.
+  remote_write_queue:
+    enabled: false
+  sending_queue:
+    enabled: true
+    num_consumers: 10
+    queue_size: 5000
+
 prometheusremotewrite/non_snappy_compression_type:
   endpoint: "localhost:8888"
   compression: "gzip"

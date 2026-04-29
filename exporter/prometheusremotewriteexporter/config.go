@@ -52,6 +52,10 @@ type Config struct {
 	// WAL enables persisting metrics to a write-ahead-log before sending to the remote storage.
 	WAL configoptional.Optional[WALConfig] `mapstructure:"wal"`
 
+	// SendingQueue opts in to the standard exporterhelper queue (QueueBatchConfig).
+	// When sending_queue.enabled is true, remote_write_queue and wal must both be disabled.
+	SendingQueue exporterhelper.QueueBatchConfig `mapstructure:"sending_queue"`
+
 	// TargetInfo allows customizing the target_info metric
 	TargetInfo TargetInfo `mapstructure:"target_info,omitempty"`
 
@@ -124,6 +128,15 @@ var _ component.Config = (*Config)(nil)
 func (cfg *Config) Validate() error {
 	if cfg.MaxBatchRequestParallelism != nil && *cfg.MaxBatchRequestParallelism < 1 {
 		return errors.New("max_batch_request_parallelism can't be set to below 1")
+	}
+
+	if cfg.SendingQueue.Enabled {
+		if cfg.RemoteWriteQueue.Enabled {
+			return errors.New("sending_queue and remote_write_queue cannot both be enabled; disable remote_write_queue.enabled when using sending_queue")
+		}
+		if cfg.WAL.Get() != nil {
+			return errors.New("sending_queue and wal cannot both be enabled; remove the wal configuration when using sending_queue")
+		}
 	}
 
 	if cfg.RemoteWriteQueue.QueueSize < 0 {
