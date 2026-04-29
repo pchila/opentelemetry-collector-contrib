@@ -70,18 +70,23 @@ func createMetricsExporter(ctx context.Context, set exporter.Settings,
 	if enableMultipleWorkersFeatureGate.IsEnabled() {
 		numConsumers = prwCfg.RemoteWriteQueue.NumConsumers
 	}
+
+	queueCfg := exporterhelper.QueueBatchConfig{
+		Enabled:      prwCfg.RemoteWriteQueue.Enabled,
+		NumConsumers: numConsumers,
+		QueueSize:    int64(prwCfg.RemoteWriteQueue.QueueSize),
+		Sizer:        exporterhelper.RequestSizerTypeRequests,
+	}
+	if prwCfg.SendingQueue.Enabled {
+		queueCfg = prwCfg.SendingQueue
+	}
 	exporter, err := exporterhelper.NewMetrics(
 		ctx,
 		set,
 		cfg,
 		prwe.PushMetrics,
 		exporterhelper.WithTimeout(prwCfg.TimeoutSettings),
-		exporterhelper.WithQueue(exporterhelper.QueueBatchConfig{
-			Enabled:      prwCfg.RemoteWriteQueue.Enabled,
-			NumConsumers: numConsumers,
-			QueueSize:    int64(prwCfg.RemoteWriteQueue.QueueSize),
-			Sizer:        exporterhelper.RequestSizerTypeRequests,
-		}),
+		exporterhelper.WithQueue(queueCfg),
 		exporterhelper.WithStart(prwe.Start),
 		exporterhelper.WithShutdown(prwe.Shutdown),
 	)

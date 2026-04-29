@@ -15,6 +15,7 @@ import (
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config/confighttp"
 	"go.opentelemetry.io/collector/config/configopaque"
+	"go.opentelemetry.io/collector/config/configoptional"
 	"go.opentelemetry.io/collector/config/configretry"
 	"go.opentelemetry.io/collector/config/configtls"
 	"go.opentelemetry.io/collector/confmap/confmaptest"
@@ -150,6 +151,73 @@ func TestDisabledTargetInfo(t *testing.T) {
 	require.NoError(t, sub.Unmarshal(cfg))
 
 	assert.False(t, cfg.(*Config).TargetInfo.Enabled)
+}
+
+func TestSendingQueueConfig(t *testing.T) {
+	cm, err := confmaptest.LoadConf(filepath.Join("testdata", "config.yaml"))
+	require.NoError(t, err)
+	factory := NewFactory()
+	cfg := factory.CreateDefaultConfig()
+
+	sub, err := cm.Sub(component.NewIDWithName(metadata.Type, "with_sending_queue").String())
+	require.NoError(t, err)
+	require.NoError(t, sub.Unmarshal(cfg))
+
+	prwCfg := cfg.(*Config)
+	assert.NoError(t, xconfmap.Validate(cfg))
+	assert.True(t, prwCfg.SendingQueue.Enabled)
+	assert.Equal(t, 10, prwCfg.SendingQueue.NumConsumers)
+	assert.Equal(t, int64(5000), prwCfg.SendingQueue.QueueSize)
+	assert.False(t, prwCfg.RemoteWriteQueue.Enabled)
+}
+
+func TestSendingQueueMutualExclusion(t *testing.T) {
+	tests := []struct {
+		name        string
+		mutateCfg   func(cfg *Config)
+		errContains string
+	}{
+		{
+			name: "sending_queue and remote_write_queue both enabled",
+			mutateCfg: func(cfg *Config) {
+				cfg.SendingQueue.Enabled = true
+				cfg.RemoteWriteQueue.Enabled = true
+			},
+			errContains: "sending_queue and remote_write_queue cannot both be enabled",
+		},
+		{
+			name: "sending_queue and wal both enabled",
+			mutateCfg: func(cfg *Config) {
+				cfg.SendingQueue.Enabled = true
+				cfg.SendingQueue.NumConsumers = 1
+				cfg.RemoteWriteQueue.Enabled = false // ensure only the WAL check fires
+				cfg.WAL = configoptional.Some(WALConfig{Directory: t.TempDir()})
+			},
+			errContains: "sending_queue and wal cannot both be enabled",
+		},
+		{
+			name: "sending_queue enabled alone is valid",
+			mutateCfg: func(cfg *Config) {
+				cfg.SendingQueue.Enabled = true
+				cfg.SendingQueue.NumConsumers = 1
+				cfg.SendingQueue.QueueSize = 1000
+				cfg.RemoteWriteQueue.Enabled = false
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			factory := NewFactory()
+			cfg := factory.CreateDefaultConfig().(*Config)
+			tt.mutateCfg(cfg)
+			err := xconfmap.Validate(cfg)
+			if tt.errContains != "" {
+				assert.ErrorContains(t, err, tt.errContains)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
 }
 
 func toPtr[T any](val T) *T {
